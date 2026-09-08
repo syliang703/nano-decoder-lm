@@ -1,6 +1,6 @@
 import unittest
 import torch
-from src.attention import scaled_dot_product_attention
+from src.attention import scaled_dot_product_attention, MultiHeadAttention
 
 class TestScaledDotProductAttention(unittest.TestCase):
 
@@ -47,6 +47,38 @@ class TestScaledDotProductAttention(unittest.TestCase):
 
         # TODO 3: Assert that values in the upper triangle (future tokens) are 0.0
         self.assertTrue(torch.allclose(torch.triu(weights, diagonal=1), torch.zeros_like(weights)))
+
+class TestMultiHeadAttention(unittest.TestCase):
+    def setUp(self):
+        self.batch_size = 2
+        self.seq_len = 5
+        self.d_model = 16
+        self.num_heads = 4
+
+        self.mha = MultiHeadAttention(d_model=self.d_model, num_heads=self.num_heads)
+        self.x = torch.randn(self.batch_size, self.seq_len, self.d_model)
+
+    def test_output_and_weights_shape(self):
+        # Pass self.x as Q, K, and V
+        output, attn_weights = self.mha(self.x, self.x, self.x)
+
+        # TODO 1: Assert output shape matches (self.batch_size, self.seq_len, self.d_model)
+        # Hint: self.assertEqual(...)
+        self.assertEqual(output.shape, (self.batch_size, self.seq_len, self.d_model))
+
+        # TODO 2: Assert attn_weights shape matches (self.batch_size, self.num_heads, self.seq_len, self.seq_len)
+        self.assertEqual(attn_weights.shape, (self.batch_size, self.num_heads, self.seq_len, self.seq_len))
+
+    def test_causal_masking(self):
+        # Lower-triangular causal mask of shape (1, 1, seq_len, seq_len)
+        causal_mask = torch.tril(torch.ones(self.seq_len, self.seq_len)).unsqueeze(0).unsqueeze(1)
+
+        output, attn_weights = self.mha(self.x, self.x, self.x, mask=causal_mask)
+
+        # TODO 3: Extract the upper triangle of attn_weights (above diagonal)
+        # and assert that all values are strictly equal to 0.0
+        # PyTorch hints: torch.triu(..., diagonal=1) and torch.all(...)
+        self.assertTrue(torch.all(torch.triu(attn_weights, diagonal=1) == 0.0))
 
 if __name__ == "__main__":
     unittest.main()
