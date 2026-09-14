@@ -3,7 +3,7 @@ from torch.utils.data import Dataset, DataLoader
 
 class SyntheticCopyDataset(Dataset):
     """
-    Generates synthetic integer sequence pairs where the target is identical to the source.
+    Generates synthetic integer sequences for autoregressive language model training.
     """
     def __init__(self, vocab_size: int, seq_len: int, num_samples: int, pad_idx: int = 1, bos_idx: int = 2, eos_idx: int = 3):
         self.vocab_size = vocab_size
@@ -18,16 +18,16 @@ class SyntheticCopyDataset(Dataset):
         self.data = self._generate_data()
 
     def _generate_data(self):
-        # TODO: Generate random integer tensors of shape (num_samples, seq_len)
-        # Ensure values stay between 4 and vocab_size - 1 so they don't overlap reserved tokens.
-        return torch.randint(4, self.vocab_size, (self.num_samples, self.seq_len))
+        # Generate random integer tensors of shape (num_samples, seq_len + 1)
+        # Values stay between 4 and vocab_size - 1 to avoid special token overlap
+        return torch.randint(4, self.vocab_size, (self.num_samples, self.seq_len + 1))
 
     def __len__(self):
         return self.num_samples
 
     def __getitem__(self, idx):
-        # TODO: Return a single source sequence tensor and target sequence tensor
-        return self.data[idx], self.data[idx]
+        # Return a single sequence tensor for autoregressive slicing in train_one_epoch
+        return self.data[idx]
 
 def get_synthetic_dataloader(
     vocab_size: int,
@@ -35,7 +35,8 @@ def get_synthetic_dataloader(
     batch_size: int,
     num_samples: int
     ) -> DataLoader:
-    # TODO: Instantiate SyntheticCopyDataset
-    # TODO: Instantiate and return PyTorch DataLoader with shuffle enabled
+    """
+    Instantiates SyntheticCopyDataset and returns a DataLoader
+    """
     dataset = SyntheticCopyDataset(vocab_size, seq_len, num_samples)
     return DataLoader(dataset, batch_size, shuffle=True)

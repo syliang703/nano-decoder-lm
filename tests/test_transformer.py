@@ -1,34 +1,34 @@
-import unittest
+import pytest
 import torch
-from src.transformer import Transformer
+from src.transformer import NanoTransformer
+from src.utils import make_causal_mask
 
-class TestTransformer(unittest.TestCase):
-    def test_transformer_forward_shape(self):
-        # TODO: Define dimensions (batch_size, src_vocab_size, tgt_vocab_size, d_model, etc.)
-        # TODO: Instantiate Transformer model
-        # TODO: Create random integer tensors for src and tgt using torch.randint(...)
-        # TODO: Run forward pass: output = model(src, tgt)
-        # TODO: Assert that output.shape == (batch_size, tgt_seq_len, tgt_vocab_size)
-        batch_size = 6
-        src_vocab_size = 100
-        tgt_vocab_size = 100
-        d_model = 64
-        num_heads = 4
-        num_layers = 2
-        d_ff = 128
-        max_len = 20
-        src_seq_len = 10
-        tgt_seq_len = 8
-        dropout = 0.1
+def test_nano_transformer_forward_shape():
+    """Verify that input token indices map to (Batch, Seq_Len, Vocab_Size) logits."""
+    batch_size = 2
+    seq_len = 8
+    vocab_size = 100
+    d_model = 64
 
-        model = Transformer(src_vocab_size, tgt_vocab_size, d_model, num_heads, num_layers, d_ff, max_len, dropout)
+    # Use correct parameter names (num_heads, num_layers) matching NanoTransformer
+    model = NanoTransformer(
+        vocab_size=vocab_size,
+        d_model=d_model,
+        num_heads=2,
+        num_layers=2
+    )
+    idx = torch.randint(0, vocab_size, (batch_size, seq_len))
 
-        src = torch.randint(0, src_vocab_size, (batch_size, src_seq_len))
-        tgt = torch.randint(0, tgt_vocab_size, (batch_size, tgt_seq_len))
+    logits = model(idx)
+    assert logits.shape == (batch_size, seq_len, vocab_size), f"Expected shape {(batch_size, seq_len, vocab_size)}, got {logits.shape}"
 
-        output = model(src, tgt)
+def test_causal_mask_prevents_future_attention():
+    """Ensure causal mask correctly masks out future tokens."""
+    seq_len = 4
+    dummy_input = torch.zeros((1, seq_len), dtype=torch.long)
+    mask = make_causal_mask(dummy_input, pad_idx=1)
 
-        self.assertEqual(output.shape, (batch_size, tgt_seq_len, tgt_vocab_size))
-
-if __name__ == '__main__':
-    unittest.main()
+    # Upper triangle (excluding diagonal) should be False indicating masked positions
+    assert not mask[0, 0, 0, 1]
+    # Diagonal and lower triangle should be True indicating unmasked positions
+    assert mask[0, 0, 0, 0]

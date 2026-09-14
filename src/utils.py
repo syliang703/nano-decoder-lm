@@ -1,37 +1,23 @@
 import torch
 
-def make_src_mask(src: torch.Tensor, pad_idx: int) -> torch.Tensor:
+def make_causal_mask(x: torch.Tensor, pad_idx: int) -> torch.Tensor:
     """
-    Creates a padding mask for the source sequence.
+    Creates a combined causal (subsequent) and padding mask for decoder-only input sequences.
 
     Args:
-        src: Tensor of shape (batch_size, src_seq_len)
-        pad_idx: The integer index representing the padding token.
+        x: Input tensor of shape (batch_size, seq_len)
+        pad_idx: Integer index representing padding token to ignore
 
     Returns:
-        Tensor of shape (batch_size, 1, 1, src_seq_len) where
-        True (or 1) indicates valid tokens and False (or 0) indicates pad tokens.
+        Tensor of shape (batch_size, 1, seq_len, seq_len) where True (1) indicates valid/allowed attention positions and False (0) indicates masked positions.
     """
-    # TODO: Generate boolean mask checking src != pad_idx and unsqueeze dimensions for broadcasting
-    src_mask = src != pad_idx
-    return src_mask.unsqueeze(1).unsqueeze(2)
+    seq_len = x.size(1)
 
+    # 1. Padding mask: (batch_size, 1, 1, seq_len)
+    pad_mask = (x != pad_idx).unsqueeze(1).unsqueeze(2)
 
-def make_tgt_mask(tgt: torch.Tensor, pad_idx: int) -> torch.Tensor:
-    """
-    Creates a combined causal (subsequent) and padding mask for the target sequence.
+    # 2. Lower-triangular Causal mask: (1, 1, seq_len, seq_len)
+    causal_mask = torch.tril(torch.ones((seq_len, seq_len), device=x.device)).bool().unsqueeze(0).unsqueeze(0)
 
-    Args:
-        tgt: Tensor of shape (batch_size, tgt_seq_len)
-        pad_idx: The integer index representing the padding token.
-
-    Returns:
-        Tensor of shape (batch_size, 1, tgt_seq_len, tgt_seq_len)
-    """
-    # TODO 1: Generate padding mask for tgt of shape (batch_size, 1, 1, tgt_seq_len)
-    # TODO 2: Generate causal mask of shape (1, 1, tgt_seq_len, tgt_seq_len) using torch.tril
-    # TODO 3: Combine both masks using element-wise logical AND (&)
-    pad_mask = make_src_mask(tgt, pad_idx)
-    tgt_seq_len = tgt.size(1)
-    causal_mask = torch.tril(torch.ones(tgt_seq_len, tgt_seq_len, device=tgt.device)).bool()
+    # 3. Combine both masks via logical AND
     return pad_mask & causal_mask

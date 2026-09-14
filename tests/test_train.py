@@ -1,49 +1,55 @@
-import unittest
+import pytest
 import torch
-import torch.nn as nn
-from src.dataset import get_synthetic_dataloader
-from src.loss import get_label_smoothed_ce_loss
-from src.scheduler import TransformerLRScheduler
-from src.train import train_one_epoch
+from torch.utils.data import DataLoader, TensorDataset
+from src.train import get_label_smoothed_ce_loss, TransformerLRScheduler, train_one_epoch
+from src.transformer import NanoTransformer
 
-# Minimal dummy model for testing the training loop step
-class DummyTransformer(nn.Module):
-    def __init__(self, vocab_size, d_model):
-        super().__init__()
-        self.vocab_size = vocab_size
-        self.embedding = nn.Embedding(vocab_size, d_model)
-        self.fc = nn.Linear(d_model, vocab_size)
+def test_label_smoothed_ce_loss():
+    """Verify label smoothing cross entropy executes and yields scalar tensor."""
+    vocab_size = 10
+    logits = torch.randn(2, 5, vocab_size)
+    targets = torch.randint(0, vocab_size, (2, 5))
 
-    def forward(self, src, tgt_input, src_mask, tgt_mask):
-        # Maps input tokens to logits of shape (batch_size, seq_len, vocab_size)
-        x = self.embedding(tgt_input)
-        return self.fc(x)
+    criterion = get_label_smoothed_ce_loss(pad_idx=1, label_smoothing=0.1)
+    loss = criterion(logits.view(-1, vocab_size), targets.view(-1))
 
-class TestTrainEpoch(unittest.TestCase):
-    def setUp(self):
-        self.vocab_size = 20
-        self.seq_len = 8
-        self.batch_size = 2
-        self.num_samples = 4
-        self.d_model = 16
-        self.pad_idx = 1
-        self.device = torch.device("cpu")
+    assert torch.is_tensor(loss)
+    assert loss.dim() == 0  # Scalar tensor
 
-    def test_train_one_epoch_execution(self):
-        dataloader = get_synthetic_dataloader(
-            self.vocab_size, self.seq_len, self.batch_size, self.num_samples
-        )
-        model = DummyTransformer(self.vocab_size, self.d_model).to(self.device)
-        optimizer = torch.optim.Adam(model.parameters(), lr=1.0)
-        scheduler = TransformerLRScheduler(optimizer, self.d_model, warmup_steps=10)
-        loss_fn = get_label_smoothed_ce_loss(self.pad_idx)
+def test_train_one_epoch():
+    """Verify train_one_epoch runs successfully for one iteration with decoder-only model."""
+    vocab_size = 20
+    seq_len = 8
+    batch_size = 4
 
-        # TODO 1: Run train_one_epoch(...) and capture the returned average loss
-        # TODO 2: Assert that loss is an instance of float
-        # TODO 3: Assert that loss is > 0.0
-        loss = train_one_epoch(model, dataloader, optimizer, scheduler, loss_fn, self.pad_idx, self.device)
-        self.assertIsInstance(loss, float)
-        self.assertGreater(loss, 0.0)
+    # Create dummy dataset of shape (num_samples, seq_len + 1)
+    dummy_data = torch.randint(2, vocab_size, (16, seq_len + 1))
+    dataloader = DataLoader(TensorDataset(dummy_data), batch_size=batch_size, shuffle=True)
 
-if __name__ == "__main__":
-    unittest.main()
+    model = NanoTransformer(
+        vocab_size=vocab_size,
+        d_model=32,
+        num_heads=2,
+        num_layers=1,
+        d_ff=64,
+        max_len=seq_len,
+        dropout=0.0
+    )
+
+    optimizer = torch.optim.Adam(model.parameters(), lr=1.0)
+    scheduler = TransformerLRScheduler(optimizer, d_model=32, warmup_steps=10)
+    loss_fn = get_label_smoothed_ce_loss(pad_idx=1)
+    device = torch.device("cpu")
+
+    avg_loss = train_one_epoch(
+        model=model,
+        dataloader=dataloader,
+        optimizer=optimizer,
+        scheduler=scheduler,
+        loss_fn=loss_fn,
+        pad_idx=1,
+        device=device
+    )
+
+    assert isinstance(avg_loss, float)
+    assert avg_loss > 0.0

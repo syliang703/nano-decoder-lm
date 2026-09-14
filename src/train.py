@@ -1,11 +1,38 @@
 import torch
 import torch.nn as nn
+from torch.optim.lr_scheduler import _LRScheduler
 from torch.utils.data import DataLoader
 from dataset import get_synthetic_dataloader
-from transformer import Transformer
-from scheduler import TransformerLRScheduler
-from loss import get_label_smoothed_ce_loss
-from utils import make_src_mask, make_tgt_mask
+from transformer import NanoTransformer
+from utils import make_causal_mask
+
+def get_label_smoothed_ce_loss(pad_idx: int, label_smoothing: float = 0.1) -> nn.CrossEntropyLoss:
+    """
+    Constructs a PyTorch CrossEntropyLoss instance configured for sequence-to-sequence training.
+
+    Args:
+        pad_idx: The integer index representing the padding token (must be ignored in loss calculation).
+        label_smoothing: The float value for label smoothing regularization.
+
+    Returns:
+        An instance of nn.CrossEntropyLoss with padding ignored and label smoothing enabled.
+    """
+    return nn.CrossEntropyLoss(ignore_index=pad_idx, label_smoothing=label_smoothing)
+
+class TransformerLRScheduler(_LRScheduler):
+    """
+    Learning rate scheduler matching the Attention Is All You Need paper formula.
+    """
+    def __init__(self, optimizer: torch.optim.Optimizer, d_model: int, warmup_steps: int = 4000, last_epoch: int = -1):
+        self.d_model = d_model
+        self.warmup_steps = warmup_steps
+        super().__init__(optimizer, last_epoch)
+
+    def get_lr(self):
+        # PyTorch tracks step count via self._step_count
+        step = max(1, self._step_count)
+        lr_scale = (self.d_model ** -0.5) * min(step ** -0.5, step * (self.warmup_steps ** -1.5))
+        return [lr * lr_scale for lr in self.base_lrs]
 
 def train_one_epoch(
     model: nn.Module,
@@ -25,36 +52,28 @@ def train_one_epoch(
     model.train()
     total_loss = 0.0
 
-    for src, tgt in dataloader:
-        src = src.to(device)
-        tgt = tgt.to(device)
+    for x in dataloader:
+        if isinstance(x, (tuple, list)):
+            x = x[0]
+        x = x.to(device)
 
-        # Slice target tensor for target input and target labels (teacher forcing)
-        # TODO 1: Extract tgt_input (all columns except the last)
-        # TODO 2: Extract tgt_label (all columns except the first)
-        tgt_input = tgt[:, :-1]
-        tgt_label = tgt[:, 1:]
+        # 1. Autoregressive split: inputs (0 to N-1), targets (1 to N)
+        inputs = x[:, :-1]
+        targets = x[:, 1:]
 
-        # Generate masks
-        # TODO 3: Create src_mask using make_src_mask(src, pad_idx)
-        # TODO 4: Create tgt_mask using make_tgt_mask(tgt_input, pad_idx)
-        src_mask = make_src_mask(src, pad_idx)
-        tgt_mask = make_tgt_mask(tgt_input, pad_idx)
+        # 2. Causal Masking (Batch, 1, Seq_Len, Seq_Len)
+        mask = make_causal_mask(inputs, pad_idx)
 
-        # Forward pass
-        # TODO 5: Pass src, tgt_input, src_mask, tgt_mask into model(...)
-        output = model(src, tgt_input, src_mask, tgt_mask)
+        # 3. Forward pass
+        output = model(inputs, mask=mask)
 
-        # Calculate loss
-        # TODO 6: Flatten logits to (N, vocab_size) and tgt_label to (N,)
-        # TODO 7: Compute scalar loss using loss_fn
+        # 4. Calculate loss
         vocab_size = output.size(-1)
         output = output.view(-1, vocab_size)
-        tgt_label = tgt_label.reshape(-1)
-        loss = loss_fn(output, tgt_label)
+        targets = targets.reshape(-1)
+        loss = loss_fn(output, targets)
 
-        # Backward pass & optimization
-        # TODO 8: Zero gradients, execute backward pass, step optimizer, step scheduler
+        # 5. Backward pass & optimization
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
@@ -89,10 +108,9 @@ if __name__ == "__main__":
         num_samples=NUM_SAMPLES
         )
 
-    # 2. Model (Import your complete Transformer class from src.transformer)
-    model = Transformer(
-        src_vocab_size=VOCAB_SIZE,
-        tgt_vocab_size=VOCAB_SIZE,
+    # 2. Model
+    model = NanoTransformer(
+        vocab_size=VOCAB_SIZE,
         d_model=D_MODEL,
         num_heads=NUM_HEADS,
         num_layers=NUM_LAYERS,
@@ -117,4 +135,4 @@ if __name__ == "__main__":
             pad_idx=PAD_IDX,
             device=device
             )
-        print(f"Average loss: {loss}")
+        print(f"Epoch {epoch + 1}/{EPOCHS} | Average loss: {loss:.4f}")
