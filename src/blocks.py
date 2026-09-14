@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
-from src.attention import MultiHeadAttention
-from src.modules import PositionwiseFeedForward, LayerNorm
+from attention import MultiHeadAttention
+from modules import PositionwiseFeedForward, LayerNorm
 
 class EncoderBlock(nn.Module):
     def __init__(self, d_model: int, heads: int, d_ff: int, dropout: float = 0.1):
