@@ -3,7 +3,6 @@ import torch
 from src.model import RMSNorm, SwiGLU, MultiHeadAttention, NanoTransformer
 from src.utils import make_causal_mask
 
-
 def test_rmsnorm_forward_shape_and_scale():
     # TODO: Instantiate RMSNorm(dim=64)
     # TODO: Create dummy tensor x of shape (2, 16, 64)
