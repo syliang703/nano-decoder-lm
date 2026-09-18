@@ -136,7 +136,7 @@ class Generator:
 
         # 2. Run the rest of the loop starting with the first generated token as input
         for _ in range(1, max_new_tokens):
-            logits, kv_cache = self.model(generated_ids, use_cache=True, kv_cache=kv_cache)
+            logits, kv_cache = self.model(next_token_ids, use_cache=True, kv_cache=kv_cache)
             last_logits = logits[:, -1, :]
             next_token_ids = sample_next_token(logits=last_logits, temperature=temperature, top_k=top_k, top_p=top_p)
             generated_ids = torch.cat((generated_ids, next_token_ids), dim=-1)
