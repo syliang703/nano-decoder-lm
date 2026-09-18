@@ -2,9 +2,9 @@ import torch
 import torch.nn as nn
 from torch.optim.lr_scheduler import _LRScheduler
 from torch.utils.data import DataLoader
-from dataset import get_synthetic_dataloader
-from transformer import NanoTransformer
-from utils import make_causal_mask
+from src.dataset import get_synthetic_dataloader
+from src.model import NanoTransformer
+from src.utils import make_causal_mask
 
 def get_label_smoothed_ce_loss(pad_idx: int, label_smoothing: float = 0.1) -> nn.CrossEntropyLoss:
     """

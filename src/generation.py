@@ -1,6 +1,6 @@
 import torch
 import torch.nn.functional as F
-from src.transformer import NanoTransformer
+from src.model import NanoTransformer
 
 
 def sample_top_k(logits: torch.Tensor, k: int) -> torch.Tensor:
@@ -112,6 +112,7 @@ class Generator:
         temperature: float = 1.0,
         top_k: int = 0,
         top_p: float = 1.0,
+        use_cache: bool = True
     ) -> torch.Tensor:
         """
         Autoregressively generates new tokens using the model's stateful KV-cache.
@@ -129,14 +130,29 @@ class Generator:
         generated_ids = prompt_ids
 
         # 1. First run to initiate kv_cache and to use the entire prompt to sample first token
-        logits, kv_cache = self.model(prompt_ids, use_cache=True, kv_cache = None)
+        if use_cache:
+            logits, kv_cache = self.model(prompt_ids, use_cache=use_cache, kv_cache=None)
+        else:
+            logits = self.model(prompt_ids, use_cache=use_cache, kv_cache=None)
+
         last_logits = logits[:, -1, :]
         next_token_ids = sample_next_token(logits=last_logits, temperature=temperature, top_k=top_k, top_p=top_p)
         generated_ids = torch.cat((generated_ids, next_token_ids), dim=-1)
 
         # 2. Run the rest of the loop starting with the first generated token as input
         for _ in range(1, max_new_tokens):
-            logits, kv_cache = self.model(next_token_ids, use_cache=True, kv_cache=kv_cache)
+            if use_cache:
+                step_input = next_token_ids
+                step_cache = kv_cache
+            else:
+                step_input = generated_ids
+                step_cache = None
+
+            if use_cache:
+                logits, kv_cache = self.model(step_input, use_cache=use_cache, kv_cache=step_cache)
+            else:
+                logits = self.model(step_input, use_cache=use_cache, kv_cache=step_cache)
+
             last_logits = logits[:, -1, :]
             next_token_ids = sample_next_token(logits=last_logits, temperature=temperature, top_k=top_k, top_p=top_p)
             generated_ids = torch.cat((generated_ids, next_token_ids), dim=-1)

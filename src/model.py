@@ -68,6 +68,33 @@ class LayerNorm(nn.Module):
 
         return self.gamma * (x - mean) / ((var + self.eps) ** 0.5) + self.beta
 
+class RMSNorm(nn.Module):
+    """
+    Root Mean Square Layer Normalization.
+    """
+    def __init__(self, dim: int, eps: float = 1e-6):
+        super().__init__()
+        self.gamma = nn.Parameter(torch.ones(dim))
+        self.eps = eps # Stabilization constant
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        rms = torch.sqrt(torch.mean(x ** 2, dim=-1, keepdim=True) + self.eps)
+        return x / rms * self.gamma
+
+class SwiGLU(nn.Module):
+    """
+    Swish-Gated Linear Unit (SwiGLU) FFN block.
+    """
+    def __init__(self, d_model: int, hidden_dim: int):
+        super().__init__()
+        # Define linear projections (w1 for Swish gate, w2 for output down projection, w3 for value projection)
+        self.w1 = nn.Linear(d_model, hidden_dim, bias=False)
+        self.w2 = nn.Linear(hidden_dim, d_model, bias=False)
+        self.w3 = nn.Linear(d_model, hidden_dim, bias=False)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.w2(F.silu(self.w1(x)) * self.w3(x))
+
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model: int, max_len: int = 5000, dropout: float = 0.1):
         super().__init__()

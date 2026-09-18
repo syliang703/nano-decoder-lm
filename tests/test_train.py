@@ -2,7 +2,7 @@ import pytest
 import torch
 from torch.utils.data import DataLoader, TensorDataset
 from src.train import get_label_smoothed_ce_loss, TransformerLRScheduler, train_one_epoch
-from src.transformer import NanoTransformer
+from src.model import NanoTransformer
 
 def test_label_smoothed_ce_loss():
     """Verify label smoothing cross entropy executes and yields scalar tensor."""
