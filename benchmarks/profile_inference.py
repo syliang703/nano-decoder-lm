@@ -1,4 +1,9 @@
+import csv
+import gc
+import json
+import os
 import time
+from typing import Dict, List
 import torch
 from src.generation import Generator
 from src.model import NanoTransformer
@@ -36,10 +41,9 @@ def profile_memory_allocated(fn, *args, **kwargs) -> tuple:
     Returns:
         (output, peak_memory_mb)
     """
-    # TODO: Reset peak memory stats if CUDA is available
-    # TODO: Execute fn(*args, **kwargs)
-    # TODO: Measure max_memory_allocated() and convert bytes to MB
+    gc.collect()
     if torch.cuda.is_available():
+        torch.cuda.memory.empty_cache()
         torch.cuda.reset_peak_memory_stats()
         output = fn(*args, **kwargs)
         peak_memory_mb = torch.cuda.max_memory_allocated() / (1024 ** 2) # Converting to MB
@@ -137,6 +141,71 @@ def profile_uncached_vs_cached(
             'uncached_tpot_ms': uncached_tpot_ms,
             'speedup_factor': speedup_factor,
             'peak_vram_mb': peak_vram_mb}
+
+def run_benchmark_sweep(
+    model: NanoTransformer,
+    seq_lengths: List[int] = [16, 64, 256, 512, 1024],
+    max_new_tokens: int = 20,
+) -> List[Dict]:
+    """Sweeps through sequence lengths and aggregates latency & memory metrics.
+
+    Returns: List of dicts with keys: ['seq_len', 'ttft_ms', 'cached_tpot_ms',
+    'uncached_tpot_ms', 'speedup_factor', 'peak_vram_mb']
+    """
+    metrics_list = []
+    for seq_len in seq_lengths:
+        input = torch.randint(0, model.vocab_size, (1, seq_len), dtype=torch.long)
+
+        gen_metrics = profile_generation(
+            model=model,
+            prompt_ids=input,
+            max_new_tokens=max_new_tokens,
+            use_cache=True
+            )
+
+        compare_metrics = profile_uncached_vs_cached(
+            model=model,
+            prompt_ids=input,
+            max_new_tokens=max_new_tokens
+        )
+
+        metrics = {
+            "seq_len": seq_len,
+            "ttft_ms":  gen_metrics["ttft_ms"],
+            "cached_tpot_ms": compare_metrics["cached_tpot_ms"],
+            "uncached_tpot_ms": compare_metrics["uncached_tpot_ms"],
+            "speedup_factor": compare_metrics["speedup_factor"],
+            "peak_vram_mb": compare_metrics["peak_vram_mb"]
+        }
+
+        metrics_list.append(metrics)
+
+    return metrics_list
+
+def export_benchmark_results(
+    results: List[Dict],
+    output_dir: str = "benchmarks/results",
+    filename_prefix: str = "profile_run",
+) -> tuple:
+    """Saves results list into JSON and CSV files inside output_dir.
+
+    Returns: (json_filepath, csv_filepath)
+    """
+    os.makedirs(output_dir, exist_ok=True)
+
+    json_path = os.path.join(output_dir, f"{filename_prefix}.json")
+    csv_path = os.path.join(output_dir, f"{filename_prefix}.csv")
+
+    with open(json_path, "w") as f:
+        json.dump(results, f, indent=4)
+
+    if results:
+        with open(csv_path, "w", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=results[0].keys())
+            writer.writeheader()
+            writer.writerows(results)
+
+    return json_path, csv_path
 
 if __name__ == "__main__":
     VOCAB_SIZE = 5000
