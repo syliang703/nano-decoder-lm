@@ -3,7 +3,6 @@ import gc
 import json
 import os
 import time
-from typing import Dict, List
 import torch
 from src.generation import Generator
 from src.model import NanoTransformer
@@ -31,7 +30,6 @@ def measure_execution_time(fn, *args, **kwargs):
 
     return output, elapsed_ms
 
-import torch
 
 def profile_memory_allocated(fn, *args, **kwargs) -> tuple:
     """
@@ -94,7 +92,7 @@ def profile_generation(
         max_new_tokens=max_new_tokens,
         use_cache=use_cache
         )
-    tpot_ms = (total_time_ms - ttft_ms) / (max_new_tokens - 1)
+    tpot_ms = (total_time_ms - ttft_ms) / (max_new_tokens - 1) if max_new_tokens > 1 else 0.0
 
     return {'ttft_ms': ttft_ms, 'tpot_ms': tpot_ms, 'total_time_ms': total_time_ms}
 
@@ -106,6 +104,7 @@ def profile_uncached_vs_cached(
 
     Returns:
         Dict containing:
+            - 'ttft_ms': float
             - 'cached_tpot_ms': float
             - 'uncached_tpot_ms': float
             - 'speedup_factor': float (uncached / cached)
@@ -137,16 +136,17 @@ def profile_uncached_vs_cached(
         max_new_tokens=max_new_tokens
         )
 
-    return {'cached_tpot_ms': cached_tpot_ms,
+    return {'ttft_ms': cached_timings["ttft_ms"],
+            'cached_tpot_ms': cached_tpot_ms,
             'uncached_tpot_ms': uncached_tpot_ms,
             'speedup_factor': speedup_factor,
             'peak_vram_mb': peak_vram_mb}
 
 def run_benchmark_sweep(
     model: NanoTransformer,
-    seq_lengths: List[int] = [16, 64, 256, 512, 1024],
+    seq_lengths: list[int] = [16, 64, 256, 512, 1024],
     max_new_tokens: int = 20,
-) -> List[Dict]:
+) -> list[dict]:
     """Sweeps through sequence lengths and aggregates latency & memory metrics.
 
     Returns: List of dicts with keys: ['seq_len', 'ttft_ms', 'cached_tpot_ms',
@@ -156,13 +156,6 @@ def run_benchmark_sweep(
     for seq_len in seq_lengths:
         input = torch.randint(0, model.vocab_size, (1, seq_len), dtype=torch.long)
 
-        gen_metrics = profile_generation(
-            model=model,
-            prompt_ids=input,
-            max_new_tokens=max_new_tokens,
-            use_cache=True
-            )
-
         compare_metrics = profile_uncached_vs_cached(
             model=model,
             prompt_ids=input,
@@ -171,7 +164,7 @@ def run_benchmark_sweep(
 
         metrics = {
             "seq_len": seq_len,
-            "ttft_ms":  gen_metrics["ttft_ms"],
+            "ttft_ms":  compare_metrics["ttft_ms"],
             "cached_tpot_ms": compare_metrics["cached_tpot_ms"],
             "uncached_tpot_ms": compare_metrics["uncached_tpot_ms"],
             "speedup_factor": compare_metrics["speedup_factor"],
@@ -183,7 +176,7 @@ def run_benchmark_sweep(
     return metrics_list
 
 def export_benchmark_results(
-    results: List[Dict],
+    results: list[dict],
     output_dir: str = "benchmarks/results",
     filename_prefix: str = "profile_run",
 ) -> tuple:

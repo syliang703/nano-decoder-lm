@@ -1,55 +1,106 @@
+import math
 import pytest
 import torch
-from torch.utils.data import DataLoader, TensorDataset
-from src.train import get_label_smoothed_ce_loss, TransformerLRScheduler, train_one_epoch
+import torch.nn as nn
 from src.model import NanoTransformer
+from src.train import configure_optimizers, get_lr, train_step
 
-def test_label_smoothed_ce_loss():
-    """Verify label smoothing cross entropy executes and yields scalar tensor."""
-    vocab_size = 10
-    logits = torch.randn(2, 5, vocab_size)
-    targets = torch.randint(0, vocab_size, (2, 5))
 
-    criterion = get_label_smoothed_ce_loss(pad_idx=1, label_smoothing=0.1)
-    loss = criterion(logits.view(-1, vocab_size), targets.view(-1))
-
-    assert torch.is_tensor(loss)
-    assert loss.dim() == 0  # Scalar tensor
-
-def test_train_one_epoch():
-    """Verify train_one_epoch runs successfully for one iteration with decoder-only model."""
-    vocab_size = 20
-    seq_len = 8
-    batch_size = 4
-
-    # Create dummy dataset of shape (num_samples, seq_len + 1)
-    dummy_data = torch.randint(2, vocab_size, (16, seq_len + 1))
-    dataloader = DataLoader(TensorDataset(dummy_data), batch_size=batch_size, shuffle=True)
+@pytest.fixture
+def dummy_model_and_data():
+    """Fixture providing a lightweight NanoTransformer instance and dummy token tensors."""
+    vocab_size = 100
+    seq_len = 16
 
     model = NanoTransformer(
         vocab_size=vocab_size,
         d_model=32,
-        num_heads=2,
-        num_layers=1,
+        num_heads=4,
+        num_layers=2,
         d_ff=64,
-        max_len=seq_len,
-        dropout=0.0
+        max_len=128,
+        dropout=0.0,
     )
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=1.0)
-    scheduler = TransformerLRScheduler(optimizer, d_model=32, warmup_steps=10)
-    loss_fn = get_label_smoothed_ce_loss(pad_idx=1)
-    device = torch.device("cpu")
+    x = torch.randint(0, vocab_size, (2, seq_len))
+    y = torch.randint(0, vocab_size, (2, seq_len))
+    return model, x, y
 
-    avg_loss = train_one_epoch(
+
+def test_optimizer_parameter_groups(dummy_model_and_data):
+    """Verifies weight decay separation between 2D weights and 1D biases/norms."""
+    model, _, _ = dummy_model_and_data
+    optimizer = configure_optimizers(
+        model,
+        weight_decay=0.1,
+        learning_rate=1e-3,
+        betas=(0.9, 0.95),
+        device_type="cpu",
+    )
+
+    # 1. Assert optimizer has exactly 2 parameter groups
+    assert len(optimizer.param_groups) == 2
+
+    # 2. Assert group 0 has weight_decay == 0.1
+    assert optimizer.param_groups[0]["weight_decay"] == 0.1
+
+    # 3. Assert group 1 has weight_decay == 0.0
+    assert optimizer.param_groups[1]["weight_decay"] == 0.0
+
+
+def test_cosine_learning_rate_schedule():
+    """Verifies warmup ramp and cosine decay LR calculation."""
+    max_lr = 1e-3
+    min_lr = 1e-4
+    warmup_iters = 10
+    lr_decay_iters = 100
+
+    # 1. Test step 0
+    assert math.isclose(get_lr(0,
+                               learning_rate=max_lr,
+                               min_lr=min_lr,
+                               warmup_iters=warmup_iters,
+                               lr_decay_iters=lr_decay_iters
+                               ),
+                               max_lr / warmup_iters)
+    # 2. Test warmup peak
+    assert math.isclose(get_lr(warmup_iters,
+                               learning_rate=max_lr,
+                               min_lr=min_lr,
+                               warmup_iters=warmup_iters,
+                               lr_decay_iters=lr_decay_iters
+                               ),
+                               max_lr)
+    # 3. Test post-decay floor
+    assert get_lr(150,
+                  learning_rate=max_lr,
+                  min_lr=min_lr,
+                  warmup_iters=warmup_iters,
+                  lr_decay_iters=lr_decay_iters
+                  ) == min_lr
+
+
+def test_train_step_weight_update_and_loss(dummy_model_and_data):
+    """Verifies model parameters update post train_step and loss returns valid float."""
+    model, x, y = dummy_model_and_data
+    optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+
+    # Capture initial weights of first parameter tensor
+    initial_param = next(model.parameters()).clone().detach()
+
+    # Perform single training step
+    loss_val = train_step(
         model=model,
-        dataloader=dataloader,
         optimizer=optimizer,
-        scheduler=scheduler,
-        loss_fn=loss_fn,
-        pad_idx=1,
-        device=device
+        x=x,
+        y=y,
+        grad_clip=1.0,
+        device_type="cpu",
+        ptdtype=torch.bfloat16,
     )
 
-    assert isinstance(avg_loss, float)
-    assert avg_loss > 0.0
+    # 1. Assert loss_val is an instance of float and > 0.0
+    assert isinstance(loss_val, float)
+    assert loss_val > 0.0
+    # 2. Assert initial_param and next(model.parameters()) are not equal
+    assert not torch.equal(initial_param, next(model.parameters()))

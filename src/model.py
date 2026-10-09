@@ -33,7 +33,7 @@ def scaled_dot_product_attention(
 
     # 2. Apply optional mask (replace masked positions where mask == 0 with -1e9)
     if mask is not None:
-        scores = scores.masked_fill(mask == 0.0, -1e9)
+        scores = scores.masked_fill(~mask if mask.dtype == torch.bool else mask == 0.0, -1e9)
 
     # 3. Compute Softmax along the last dimension to get probabilities
     attention_weights = F.softmax(scores, dim=-1)
@@ -149,7 +149,7 @@ class MultiHeadAttention(nn.Module):
             output: Tensor of shape (batch_size, num_heads, seq_len, d_k)
         """
         batch_size, seq_len, _ = x.size()
-        return x.view(batch_size, seq_len, self.num_heads, self.d_k).transpose(1, 2)
+        return x.view(batch_size, seq_len, self.num_heads, self.d_k).transpose(1, 2).contiguous()
 
     def combine_heads(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -268,9 +268,9 @@ class TransformerBlock(nn.Module):
         norm_x = self.norm1(x)
 
         if use_cache:
-            attn_out, _, present_kv = self.mha(norm_x, norm_x, norm_x, mask=mask, use_cache=True, kv_cache=kv_cache)
+            attn_out, _, present_kv = self.mha(Q=norm_x, K=norm_x, V=norm_x, mask=mask, use_cache=True, kv_cache=kv_cache)
         else:
-            attn_out, _ = self.mha(norm_x, norm_x, norm_x, mask=mask, use_cache=False)
+            attn_out, _ = self.mha(Q=norm_x, K=norm_x, V=norm_x, mask=mask, use_cache=False)
 
         x = x + attn_out
         x = x + self.ffn(self.norm2(x))
@@ -322,7 +322,7 @@ class NanoTransformer(nn.Module):
         Returns:
             mask: Lower triangular causal mask of shape (1, 1, seq_len, seq_len)
         """
-        return torch.tril(torch.ones((seq_len, seq_len), device=device)).unsqueeze(0).unsqueeze(0)
+        return torch.tril(torch.ones((seq_len, seq_len), device=device, dtype=torch.bool)).unsqueeze(0).unsqueeze(0)
 
     def _get_start_pos(self, kv_cache):
         """
@@ -359,7 +359,7 @@ class NanoTransformer(nn.Module):
         """
         seq_len = idx.size(1)
 
-       # 1. Handle causal mask setup if mask not passed
+        # 1. Handle causal mask setup if mask not passed
         if mask is None and seq_len > 1 and not use_cache:
             mask = self._build_causal_mask(seq_len, idx.device)
 

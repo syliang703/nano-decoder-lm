@@ -1,5 +1,4 @@
 import os
-from typing import Tuple
 import numpy as np
 import torch
 from torch.utils.data import Dataset, DataLoader
@@ -42,7 +41,7 @@ class PretrainedDataset(Dataset):
         return self.total_tokens - self.block_size
 
 
-    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
+    def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
         """Fetches a single sample window and its target tokens shifted by 1 position.
 
         Args:
@@ -54,6 +53,9 @@ class PretrainedDataset(Dataset):
                 y: Target tensor of shape (block_size,) cast to torch.int64 (long)
         """
         # Boundary safety / out-of-bounds error checking
+        if idx < 0:
+            idx = idx + len(self)
+
         if idx < 0 or idx >= self.__len__():
             raise IndexError(f"Index {idx} out of bounds for dataset of length {len(self)}")
 

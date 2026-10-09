@@ -13,7 +13,7 @@ def test_tokenizer_encode_decode_roundtrip():
     # Assert token IDs is a list of integers
     assert isinstance(input_tokens[0], int)
 
-    output_text = tokenizer.decode(input_tokens)
+    output_text = tokenizer.decode(input_tokens, skip_special_tokens=True)
     # Assert decoded string contains original sample text
     assert output_text == input_text
 
@@ -48,7 +48,7 @@ def test_prepare_train_val_splits_file_creation(tmp_path):
     train_bin_path, val_bin_path = prepare_train_val_splits(
         raw_text=input_text,
         tokenizer=tokenizer,
-        val_ratio = VAL_RATIO,
+        val_ratio=VAL_RATIO,
         output_dir=tmp_path
     )
 
@@ -61,3 +61,8 @@ def test_prepare_train_val_splits_file_creation(tmp_path):
     # Assert loaded numpy arrays are non-empty
     assert train_tokens.size > 0
     assert val_tokens.size > 0
+
+    # Check that validation split length matches requested val_ratio
+    total_tokens = len(train_tokens) + len(val_tokens)
+    split_idx = int(total_tokens * (1 - VAL_RATIO))
+    assert len(val_tokens) == total_tokens - split_idx

@@ -17,7 +17,7 @@ def make_causal_mask(x: torch.Tensor, pad_idx: int) -> torch.Tensor:
     pad_mask = (x != pad_idx).unsqueeze(1).unsqueeze(2)
 
     # 2. Lower-triangular Causal mask: (1, 1, seq_len, seq_len)
-    causal_mask = torch.tril(torch.ones((seq_len, seq_len), device=x.device)).bool().unsqueeze(0).unsqueeze(0)
+    causal_mask = torch.tril(torch.ones((seq_len, seq_len), device=x.device, dtype=torch.bool)).unsqueeze(0).unsqueeze(0)
 
     # 3. Combine both masks via logical AND
     return pad_mask & causal_mask

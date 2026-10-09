@@ -14,13 +14,17 @@ def sample_top_k(logits: torch.Tensor, k: int) -> torch.Tensor:
     Returns:
         filtered_logits: Tensor of shape (batch_size, vocab_size)
     """
-    # 1. Get top-k values along vocab_size dim
+    # 1. Limit k to vocab size
+    vocab_size = logits.size(-1)
+    k = min(k, vocab_size)
+
+    # 2. Get top-k values along vocab_size dim
     topk_values, _ = torch.topk(logits, k, dim=-1)
 
-    # 2. Extract min value across all batches
+    # 3. Extract min value across all batches
     min_vals = topk_values[:, -1:]
 
-    # 3. Mask everything lower than the min value with -inf
+    # 4. Mask everything lower than the min value with -inf
     filtered_logits = torch.where(logits < min_vals, float("-inf"), logits)
     return filtered_logits
 
@@ -112,7 +116,8 @@ class Generator:
         temperature: float = 1.0,
         top_k: int = 0,
         top_p: float = 1.0,
-        use_cache: bool = True
+        use_cache: bool = True,
+        eos_token_id: int | None = None
     ) -> torch.Tensor:
         """
         Autoregressively generates new tokens using the model's stateful KV-cache.
@@ -128,33 +133,30 @@ class Generator:
             generated_ids: Tensor of full sequence (prompt + new tokens) of shape (batch_size, seq_len + max_new_tokens)
         """
         generated_ids = prompt_ids
+        kv_cache = None
+        step_input = prompt_ids
 
-        # 1. First run to initiate kv_cache and to use the entire prompt to sample first token
-        if use_cache:
-            logits, kv_cache = self.model(prompt_ids, use_cache=use_cache, kv_cache=None)
-        else:
-            logits = self.model(prompt_ids, use_cache=use_cache, kv_cache=None)
-
-        last_logits = logits[:, -1, :]
-        next_token_ids = sample_next_token(logits=last_logits, temperature=temperature, top_k=top_k, top_p=top_p)
-        generated_ids = torch.cat((generated_ids, next_token_ids), dim=-1)
-
-        # 2. Run the rest of the loop starting with the first generated token as input
-        for _ in range(1, max_new_tokens):
+        # 1. Run loop across all new tokens to generate
+        for _ in range(max_new_tokens):
             if use_cache:
-                step_input = next_token_ids
-                step_cache = kv_cache
+                logits, kv_cache = self.model(step_input, use_cache=True, kv_cache=kv_cache)
             else:
-                step_input = generated_ids
-                step_cache = None
-
-            if use_cache:
-                logits, kv_cache = self.model(step_input, use_cache=use_cache, kv_cache=step_cache)
-            else:
-                logits = self.model(step_input, use_cache=use_cache, kv_cache=step_cache)
+                logits = self.model(generated_ids, use_cache=False)
 
             last_logits = logits[:, -1, :]
-            next_token_ids = sample_next_token(logits=last_logits, temperature=temperature, top_k=top_k, top_p=top_p)
+            next_token_ids = sample_next_token(
+                logits=last_logits,
+                temperature=temperature,
+                top_k=top_k,
+                top_p=top_p,
+            )
+
             generated_ids = torch.cat((generated_ids, next_token_ids), dim=-1)
+            step_input = next_token_ids
+
+            #2. Early exit if EOS token sampled (batch_size == 1)
+            if eos_token_id is not None and prompt_ids.size(0) == 1:
+                if (next_token_ids == eos_token_id).all():
+                    break
 
         return generated_ids

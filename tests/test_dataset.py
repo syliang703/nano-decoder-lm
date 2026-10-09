@@ -21,9 +21,7 @@ def test_dataset_initialization_and_length(dummy_bin_file):
     block_size = 10
     dataset = PretrainedDataset(bin_path=dummy_bin_file, block_size=block_size)
 
-    # TODO: Assert dataset total_tokens equals 100
     assert dataset.total_tokens == 100
-    # TODO: Assert len(dataset) equals total_tokens - block_size (100 - 10 = 90)
     assert len(dataset) == dataset.total_tokens - block_size
 
 
@@ -32,17 +30,16 @@ def test_dataset_autoregressive_target_shift(dummy_bin_file):
     block_size = 5
     dataset = PretrainedDataset(bin_path=dummy_bin_file, block_size=block_size)
 
-    # Fetch sample at index 0
-    # TODO: x, y = dataset[0]
     input_sample, target_sample = dataset[0]
-    # TODO: Assert x matches expected tensor ([0, 1, 2, 3, 4])
+
+    # TODO: Assert input and target match expected tensor
     assert torch.equal(input_sample, torch.tensor([0, 1, 2, 3, 4]))
-    # TODO: Assert y matches expected tensor ([1, 2, 3, 4, 5])
     assert torch.equal(target_sample, torch.tensor([1, 2, 3, 4, 5]))
-    # TODO: Assert x shape is (block_size,) and dtype is torch.int64
+
+    # TODO: Assert input and target shape and dtype
     assert input_sample.shape == (block_size, )
     assert input_sample.dtype == torch.int64
-    # TODO: Assert y shape is (block_size,) and dtype is torch.int64
+
     assert target_sample.shape == (block_size, )
     assert target_sample.dtype == torch.int64
 
@@ -52,7 +49,6 @@ def test_dataset_out_of_bounds_safety(dummy_bin_file):
     block_size = 10
     dataset = PretrainedDataset(bin_path=dummy_bin_file, block_size=block_size)
 
-    # TODO: Assert that dataset[len(dataset)] or dataset[999] raises IndexError
     with pytest.raises(IndexError):
         _ = dataset[-999]
 
@@ -70,10 +66,8 @@ def test_dataloader_batch_collation(dummy_bin_file):
     dataset = PretrainedDataset(bin_path=dummy_bin_file, block_size=block_size)
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
 
-    # Fetch first batch
-    # TODO: x_batch, y_batch = next(iter(dataloader))
     input_batch, target_batch = next(iter(dataloader))
-    # TODO: Assert x_batch shape is (batch_size, block_size) -> (4, 8)
+
+    # Check input and target batch shapes
     assert input_batch.shape == (batch_size, block_size)
-    # TODO: Assert y_batch shape is (batch_size, block_size) -> (4, 8)
     assert target_batch.shape == (batch_size, block_size)

@@ -9,7 +9,7 @@ class Tokenizer:
     managing special tokens (<bos>, <eos>, <pad>).
     """
 
-    def __init__(self, model_name: str = "gpt2"):
+    def __init__(self, model_name: str = "gpt2", custom_pad_id: int | None = None):
         """Initializes the underlying subword encoder and assigns special token
         IDs."""
 
@@ -17,7 +17,7 @@ class Tokenizer:
         # Define and store special token IDs
         self.bos_id = self.encoder.eot_token
         self.eos_id = self.encoder.eot_token
-        self.pad_id = self.encoder.eot_token
+        self.pad_id = custom_pad_id if custom_pad_id is not None else self.encoder.eot_token
 
     @property
     def vocab_size(self) -> int:
@@ -51,7 +51,7 @@ class Tokenizer:
 
         return id_list
 
-    def decode(self, ids: Union[List[int], torch.Tensor]) -> str:
+    def decode(self, ids: Union[List[int], torch.Tensor], skip_special_tokens: bool = False) -> str:
         """Decodes a list or Tensor of token IDs back into a text string.
 
         Args:
@@ -65,7 +65,8 @@ class Tokenizer:
             ids = ids.view(-1).tolist()
 
         # 2. Filter or handle special tokens if required by decoder
-        special_ids = {self.bos_id, self.eos_id, self.pad_id}
-        clean_ids = [token_id for token_id in ids if token_id not in special_ids]
+        if skip_special_tokens:
+            special_ids = {self.bos_id, self.eos_id, self.pad_id}
+            clean_ids = [token_id for token_id in ids if token_id not in special_ids]
 
         return self.encoder.decode(clean_ids)

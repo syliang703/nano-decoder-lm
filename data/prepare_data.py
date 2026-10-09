@@ -1,5 +1,4 @@
 import os
-from typing import Tuple
 import numpy as np
 from src.tokenizer import Tokenizer
 
@@ -40,7 +39,7 @@ def prepare_train_val_splits(
     tokenizer: Tokenizer,
     val_ratio: float = 0.1,
     output_dir: str = "data/processed",
-) -> Tuple[str, str]:
+) -> tuple[str, str]:
     """Splits raw text corpus into train and validation sets, tokenizes both,
 
     and writes binary uint arrays to disk.
@@ -56,14 +55,13 @@ def prepare_train_val_splits(
     """
     os.makedirs(output_dir, exist_ok=True)
 
-    # 1. Split into train and val sets
-    split_idx = int(len(raw_text) * (1 - val_ratio))
-    train_text = raw_text[:split_idx]
-    val_text = raw_text[split_idx:]
+    # 1. Tokenize full corpus first
+    tokenized_text = tokenize_text_corpus(text_data=raw_text, tokenizer=tokenizer)
 
-    # 2. Tokenize sets into np arrays
-    train_tokens = tokenize_text_corpus(text_data=train_text, tokenizer=tokenizer)
-    val_tokens = tokenize_text_corpus(text_data=val_text, tokenizer=tokenizer)
+    # 2. Split into train and val sets
+    split_idx = int(len(tokenized_text) * (1 - val_ratio))
+    train_tokens = tokenized_text[:split_idx]
+    val_tokens = tokenized_text[split_idx:]
 
     # 3. Write binary files
     train_bin_path = os.path.join(output_dir, "train.bin")
