@@ -3,7 +3,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
-
+from src.checkpoint import save_checkpoint, load_checkpoint
+from src.dataset import PretrainedDataset
+from src.model import NanoTransformer
 
 def configure_optimizers(
     model: nn.Module,
@@ -82,3 +84,67 @@ def train_step(
     optimizer.step()
 
     return loss.item()
+
+def train_model():
+    """Main training orchestrator for nano-decoder-lm."""
+    # TODO: Initialize configuration, model, dataloaders, optimizer, and AMP scaler/dtypes
+    vocab_size = 50000
+    d_model = 512
+    num_heads = 8
+    num_layers = 6
+    d_ff = 2048
+    max_len = 5000
+    dropout = 0.1
+
+    model = NanoTransformer(vocab_size=vocab_size,
+                            d_model=d_model,
+                            num_heads=num_heads,
+                            num_layers=num_layers,
+                            d_ff=d_ff,
+                            max_len=max_len,
+                            dropout=dropout
+                            )
+
+    weight_decay = 0.5
+    learning_rate = 1e-3
+    betas = (0.7, 0.7)
+    device_type = 'cpu'
+    ptdtype = torch.float32
+
+    optimizer = configure_optimizers(model=model,
+                                     weight_decay=weight_decay,
+                                     learning_rate=learning_rate,
+                                     betas=betas,
+                                     device_type=device_type
+                                     )
+
+    train_data = PretrainedDataset(bin_path="training_data.bin",
+                                   block_size=64
+                                   )
+
+    train_dataloader = DataLoader(train_data, batch_size=64, shuffle=True)
+
+    # TODO: Run training loop over iterations, calling train_step, evaluating, and saving checkpoints periodically
+    epochs = 100
+
+    for epoch in range(epochs):
+        for x, y in train_dataloader:
+            loss = train_step(model=model,
+                            optimizer=optimizer,
+                            x=x,
+                            y=y,
+                            grad_clip=1.0,
+                            ptdtype=ptdtype
+                            )
+
+        if epoch % 10 == 0:
+            print(f"Epoch {epoch} | Loss: {loss:.4f}")
+            save_checkpoint(model=model,
+                            optimizer=optimizer,
+                            iteration=epoch,
+                            val_loss=loss,
+                            filepath=f"checkpoint_{epoch}.pt")
+
+
+if __name__ == "__main__":
+    train_model()
