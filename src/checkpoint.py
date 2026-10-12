@@ -17,7 +17,7 @@ def save_checkpoint(
         'model_state_dict': model.state_dict(),
         'optimizer_state_dict': optimizer.state_dict(),
         'epoch': iteration,
-        "loss": val_loss
+        'loss': val_loss
     }
 
     torch.save(checkpoint, filepath)
