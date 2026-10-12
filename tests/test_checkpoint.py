@@ -26,5 +26,7 @@ def test_checkpoint_roundtrip(tmp_path):
     # TODO: Assert model weights match and iteration/val_loss metadata are recovered correctly
     for key in model.state_dict():
         assert torch.equal(model_new.state_dict()[key], model.state_dict()[key])
+    for key in optimizer.state_dict():
+        assert torch.equal(optimizer_new.state_dict()[key], optimizer.state_dict()[key])
     assert checkpoint['epoch'] == epoch
     assert checkpoint['loss'] == loss

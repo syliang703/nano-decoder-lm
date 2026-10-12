@@ -32,11 +32,11 @@ def test_dataset_autoregressive_target_shift(dummy_bin_file):
 
     input_sample, target_sample = dataset[0]
 
-    # TODO: Assert input and target match expected tensor
+    # Assert input and target match expected tensor
     assert torch.equal(input_sample, torch.tensor([0, 1, 2, 3, 4]))
     assert torch.equal(target_sample, torch.tensor([1, 2, 3, 4, 5]))
 
-    # TODO: Assert input and target shape and dtype
+    # Assert input and target shape and dtype
     assert input_sample.shape == (block_size, )
     assert input_sample.dtype == torch.int64
 

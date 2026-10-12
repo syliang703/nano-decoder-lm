@@ -5,7 +5,9 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from src.checkpoint import save_checkpoint, load_checkpoint
 from src.dataset import PretrainedDataset
+from src.generation import Generator
 from src.model import NanoTransformer
+
 
 def configure_optimizers(
     model: nn.Module,
@@ -87,7 +89,7 @@ def train_step(
 
 def train_model():
     """Main training orchestrator for nano-decoder-lm."""
-    # TODO: Initialize configuration, model, dataloaders, optimizer, and AMP scaler/dtypes
+    # 1. Initialize configuration, model, dataloaders, optimizer, and AMP scaler/dtypes
     vocab_size = 50000
     d_model = 512
     num_heads = 8
@@ -95,6 +97,12 @@ def train_model():
     d_ff = 2048
     max_len = 5000
     dropout = 0.1
+
+    weight_decay = 0.5
+    learning_rate = 1e-3
+    betas = (0.7, 0.7)
+    device_type = 'cpu'
+    ptdtype = torch.float32
 
     model = NanoTransformer(vocab_size=vocab_size,
                             d_model=d_model,
@@ -104,12 +112,6 @@ def train_model():
                             max_len=max_len,
                             dropout=dropout
                             )
-
-    weight_decay = 0.5
-    learning_rate = 1e-3
-    betas = (0.7, 0.7)
-    device_type = 'cpu'
-    ptdtype = torch.float32
 
     optimizer = configure_optimizers(model=model,
                                      weight_decay=weight_decay,
@@ -124,7 +126,7 @@ def train_model():
 
     train_dataloader = DataLoader(train_data, batch_size=64, shuffle=True)
 
-    # TODO: Run training loop over iterations, calling train_step, evaluating, and saving checkpoints periodically
+    # 2. Run training loop over iterations, saving checkpoints periodically
     epochs = 100
 
     for epoch in range(epochs):
@@ -144,6 +146,52 @@ def train_model():
                             iteration=epoch,
                             val_loss=loss,
                             filepath=f"checkpoint_{epoch}.pt")
+
+
+@torch.no_grad()
+def estimate_loss(
+    model: nn.Module,
+    eval_dataloader: DataLoader,
+    device_type: str,
+    ptdtype: torch.dtype,
+    max_eval_iters: int = 50,
+) -> float:
+    """Computes average cross-entropy loss over validation/evaluation batches without gradient updates."""
+    model.eval()
+    total_loss = 0.0
+    epochs = 0
+
+    for x, y in eval_dataloader:
+        if epochs >= max_eval_iters:
+            break
+
+        with torch.autocast(device_type=device_type, dtype=ptdtype):
+            output = model(x)
+            loss = F.cross_entropy(output.view(-1, output.size(-1)), y.view(-1))
+
+        total_loss += loss.item()
+        epochs += 1
+
+    model.train()
+    return total_loss / max(epochs, 1)
+
+
+def generate_sample_text(
+    model: nn.Module,
+    prompt_tokens: torch.Tensor,
+    max_new_tokens: int,
+    device: str,
+) -> torch.Tensor:
+    """Generates text tokens from a prompt using the model's sampling engine."""
+    # TODO: Invoke sampling/generation logic from your generation module
+    model.eval()
+    generator = Generator(model=model)
+
+    with torch.no_grad():
+        output_tokens = generator.generate(prompt_ids=prompt_tokens, max_new_tokens=max_new_tokens)
+
+    model.train()
+    return output_tokens
 
 
 if __name__ == "__main__":
