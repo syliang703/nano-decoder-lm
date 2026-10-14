@@ -10,11 +10,11 @@ def test_checkpoint_roundtrip(tmp_path):
     """Verifies that saving and loading a checkpoint preserves model weights, optimizer state, and metadata exactly."""
     model = NanoTransformer(vocab_size=512)
     optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
-    epoch = 10
+    step = 10
     loss = -1e4
 
     # Save checkpoint using save_checkpoint
-    save_checkpoint(model=model, optimizer=optimizer, filepath=tmp_path/"checkpoint.pt", iteration=epoch, val_loss=loss)
+    save_checkpoint(model=model, optimizer=optimizer, filepath=tmp_path/"checkpoint.pt", iteration=step, val_loss=loss)
 
     # Instantiate a fresh model/optimizer and load the checkpoint
     model_new = NanoTransformer(vocab_size=512)
@@ -27,5 +27,5 @@ def test_checkpoint_roundtrip(tmp_path):
         assert torch.equal(model_new.state_dict()[key], model.state_dict()[key])
     for key in optimizer.state_dict():
         assert torch.equal(optimizer_new.state_dict()[key], optimizer.state_dict()[key])
-    assert checkpoint['epoch'] == epoch
+    assert checkpoint['step'] == step
     assert checkpoint['loss'] == loss

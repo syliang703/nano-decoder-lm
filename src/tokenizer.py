@@ -67,6 +67,6 @@ class Tokenizer:
         # 2. Filter or handle special tokens if required by decoder
         if skip_special_tokens:
             special_ids = {self.bos_id, self.eos_id, self.pad_id}
-            clean_ids = [token_id for token_id in ids if token_id not in special_ids]
+            ids = [token_id for token_id in ids if token_id not in special_ids]
 
-        return self.encoder.decode(clean_ids)
+        return self.encoder.decode(ids)

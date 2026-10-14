@@ -12,11 +12,10 @@ def save_checkpoint(
     filepath: str | Path,
 ) -> None:
     """Serializes model state, optimizer state, iteration counter, and validation loss to disk."""
-    # TODO: Implement checkpoint dictionary assembly and torch.save
     checkpoint = {
         'model_state_dict': model.state_dict(),
         'optimizer_state_dict': optimizer.state_dict(),
-        'epoch': iteration,
+        'step': iteration,
         'loss': val_loss
     }
 
@@ -33,7 +32,6 @@ def load_checkpoint(
 
     Returns the loaded checkpoint dictionary (containing iteration, val_loss, etc.).
     """
-    # TODO: Implement torch.load, model.load_state_dict, and optional optimizer state loading
     checkpoint = torch.load(filepath, map_location=device, weights_only=False)
 
     model.load_state_dict(checkpoint['model_state_dict'])

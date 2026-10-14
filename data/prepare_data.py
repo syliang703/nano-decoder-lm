@@ -71,3 +71,19 @@ def prepare_train_val_splits(
     val_tokens.tofile(val_bin_path)
 
     return train_bin_path, val_bin_path
+
+if __name__ == "__main__":
+    tokenizer = Tokenizer(model_name="gpt2")
+
+    with open("TinyStories.txt", "r", encoding="utf-8") as f:
+        raw_text = f.read()
+
+    train_path, val_path = prepare_train_val_splits(raw_text=raw_text,
+                                                    tokenizer=tokenizer,
+                                                    val_ratio=0.1,
+                                                    output_dir="data/processed"
+                                                    )
+
+    print(f"Data processed succesfully!")
+    print(f"Train binary saved to {train_path}")
+    print(f"Val binary saved to {val_path}")

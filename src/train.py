@@ -76,9 +76,8 @@ def train_step(
     """Executes a single forward, backward, gradient clipping, and optimizer step under AMP."""
     optimizer.zero_grad(set_to_none=True)
 
-    with torch.amp.autocast(device_type=device_type, dtype=ptdtype):
-        logits = model(x)
-        loss = F.cross_entropy(logits.view(-1, logits.size(-1)), y.view(-1))
+    logits = model(x)
+    loss = F.cross_entropy(logits.view(-1, logits.size(-1)), y.view(-1))
 
     loss.backward()
     torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
@@ -165,9 +164,10 @@ def estimate_loss(
         if epochs >= max_eval_iters:
             break
 
-        with torch.autocast(device_type=device_type, dtype=ptdtype):
-            output = model(x)
-            loss = F.cross_entropy(output.view(-1, output.size(-1)), y.view(-1))
+        x, y = x.to(device_type), y.to(device_type)
+
+        output = model(x)
+        loss = F.cross_entropy(output.view(-1, output.size(-1)), y.view(-1))
 
         total_loss += loss.item()
         epochs += 1
@@ -180,12 +180,14 @@ def generate_sample_text(
     model: nn.Module,
     prompt_tokens: torch.Tensor,
     max_new_tokens: int,
-    device: str,
+    temperature: float,
+    top_k: int,
+    top_p: float,
+    device: str
 ) -> torch.Tensor:
     """Generates text tokens from a prompt using the model's sampling engine."""
-    # TODO: Invoke sampling/generation logic from your generation module
     model.eval()
-    generator = Generator(model=model)
+    generator = Generator(model=model, temperature=temperature, top_k=top_k, top_p=top_p)
 
     with torch.no_grad():
         output_tokens = generator.generate(prompt_ids=prompt_tokens, max_new_tokens=max_new_tokens)

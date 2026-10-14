@@ -33,7 +33,7 @@ def scaled_dot_product_attention(
 
     # 2. Apply optional mask (replace masked positions where mask == 0 with -1e9)
     if mask is not None:
-        scores = scores.masked_fill(~mask if mask.dtype == torch.bool else mask == 0.0, -1e9)
+        scores = scores.masked_fill(~mask if mask.dtype == torch.bool else mask == 0.0, float('-inf'))
 
     # 3. Compute Softmax along the last dimension to get probabilities
     attention_weights = F.softmax(scores, dim=-1)
@@ -265,15 +265,16 @@ class TransformerBlock(nn.Module):
         x: Transformer block output of shape(batch_size, seq_len, d_model)
         present_kv: Updated (K, V) values if KV caching is enabled of shape (batch_size, num_heads, past_seq_len + seq_len, head_dim)
         """
-        norm_x = self.norm1(x)
+        norm_x1 = self.norm1(x)
 
         if use_cache:
-            attn_out, _, present_kv = self.mha(Q=norm_x, K=norm_x, V=norm_x, mask=mask, use_cache=True, kv_cache=kv_cache)
+            attn_out, _, present_kv = self.mha(Q=norm_x1, K=norm_x1, V=norm_x1, mask=mask, use_cache=True, kv_cache=kv_cache)
         else:
-            attn_out, _ = self.mha(Q=norm_x, K=norm_x, V=norm_x, mask=mask, use_cache=False)
+            attn_out, _ = self.mha(Q=norm_x1, K=norm_x1, V=norm_x1, mask=mask, use_cache=False)
 
         x = x + attn_out
-        x = x + self.ffn(self.norm2(x))
+        norm_x2 = self.norm2(x)
+        x = x + self.ffn(norm_x2)
 
         if use_cache:
             return x, present_kv
@@ -367,7 +368,8 @@ class NanoTransformer(nn.Module):
         start_pos = self._get_start_pos(kv_cache)
 
         # 3. xEmbeddings and positional encoding
-        x = self.token_embedding(idx) * (self.d_model ** 0.5)
+        # x = self.token_embedding(idx) * (self.d_model ** 0.5) large d_model can cause instability
+        x = self.token_embedding(idx)
         x = self.pos_encoding(x, start_pos=start_pos)
         x = self.dropout(x)
 

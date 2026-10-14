@@ -105,17 +105,17 @@ def sample_next_token(
 
 
 class Generator:
-    def __init__(self, model: NanoTransformer):
+    def __init__(self, model: NanoTransformer, temperature: float=1.0, top_k: int=0, top_p:float=1.0):
         self.model = model
+        self.temperature = temperature
+        self.top_k = top_k
+        self.top_p = top_p
 
     @torch.no_grad()
     def generate(
         self,
         prompt_ids: torch.Tensor,
         max_new_tokens: int = 20,
-        temperature: float = 1.0,
-        top_k: int = 0,
-        top_p: float = 1.0,
         use_cache: bool = True,
         eos_token_id: int | None = None
     ) -> torch.Tensor:
@@ -146,9 +146,9 @@ class Generator:
             last_logits = logits[:, -1, :]
             next_token_ids = sample_next_token(
                 logits=last_logits,
-                temperature=temperature,
-                top_k=top_k,
-                top_p=top_p,
+                temperature=self.temperature,
+                top_k=self.top_k,
+                top_p=self.top_p,
             )
 
             generated_ids = torch.cat((generated_ids, next_token_ids), dim=-1)
