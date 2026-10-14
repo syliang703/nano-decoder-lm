@@ -132,6 +132,14 @@ class Generator:
         Returns:
             generated_ids: Tensor of full sequence (prompt + new tokens) of shape (batch_size, seq_len + max_new_tokens)
         """
+        max_len = getattr(self.model, "max_len")
+        prompt_len = prompt_ids.shape[1]
+
+        if prompt_len + max_new_tokens > max_len:
+            print(f"Warning: Total request length exceeds model's maximum supported context window.")
+            print(f"Capping to maximum supported context window")
+            max_new_tokens = max_len - prompt_len
+
         generated_ids = prompt_ids
         kv_cache = None
         step_input = prompt_ids
@@ -151,12 +159,12 @@ class Generator:
                 top_p=self.top_p,
             )
 
-            generated_ids = torch.cat((generated_ids, next_token_ids), dim=-1)
-            step_input = next_token_ids
-
             #2. Early exit if EOS token sampled (batch_size == 1)
             if eos_token_id is not None and prompt_ids.size(0) == 1:
                 if (next_token_ids == eos_token_id).all():
                     break
+
+            generated_ids = torch.cat((generated_ids, next_token_ids), dim=-1)
+            step_input = next_token_ids
 
         return generated_ids

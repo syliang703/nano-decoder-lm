@@ -42,12 +42,9 @@ def main():
         device = 'cpu'
     device_type = device
 
-    ptdtype = torch.bfloat16 if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else torch.float16
-
-    print(f"Using device: {device} | AMP dtype: {ptdtype}")
+    print(f"Using device: {device}")
 
     # 2. Data Loading
-    # TODO: Initialize your tokenizer and instantiate PretrainedDataset / DataLoader for train.bin and val.bin
     tokenizer = Tokenizer(model_name="gpt2")
     vocab_size = tokenizer.vocab_size
 
@@ -58,7 +55,6 @@ def main():
     val_dataloader = DataLoader(dataset=val_data, batch_size=batch_size, shuffle=False)
 
     # 3. Model & Optimizer Initialization
-    # TODO: Instantiate NanoTransformer and configure optimizers using configure_optimizers
     model = NanoTransformer(vocab_size=vocab_size,
                             d_model=d_model,
                             num_heads=num_heads,
@@ -76,10 +72,10 @@ def main():
                                      device_type=device_type
                                      )
 
-    checkpoint_path = "checkpoints/checkpoint_0.pt"
+    checkpoint_path = "checkpoints/checkpoint_4799.pt"
 
     if os.path.exists(checkpoint_path):
-        checkpoint = load_checkpoint(filepath=checkpoint_path,
+        _, checkpoint = load_checkpoint(filepath=checkpoint_path,
                                      model=model,
                                      optimizer=optimizer,
                                      device=device
@@ -88,13 +84,9 @@ def main():
         global_step = checkpoint['step']
         print(f"Resuming training from checkpoint {global_step}")
 
-        model.load_state_dict(checkpoint['model_state_dict'])
-        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-
         global_step += 1
 
     # 4. Training Loop
-    # TODO: Implement training iterations, periodic loss evaluation, text generation sampling, and checkpoint saving
     sample_input = "There once was a man"
     print(f"Sample input: {sample_input}")
     sample_input_tokens = torch.tensor(tokenizer.encode(text=sample_input),
@@ -115,8 +107,7 @@ def main():
                               x=x,
                               y=y,
                               grad_clip=grad_clip,
-                              device_type=device_type,
-                              ptdtype=ptdtype
+                              device_type=device_type
                               )
 
             if math.isnan(loss) or math.isinf(loss):
@@ -130,7 +121,7 @@ def main():
                 checkpoint_path = f"checkpoints/checkpoint_{last_checkpoint}.pt"
 
                 if os.path.exists(checkpoint_path):
-                    checkpoint = load_checkpoint(filepath=checkpoint_path,
+                    _, checkpoint = load_checkpoint(filepath=checkpoint_path,
                                                     model=model,
                                                     optimizer=optimizer,
                                                     device=device
@@ -138,9 +129,6 @@ def main():
 
                     global_step = checkpoint['step']
                     print(f"Resuming training from checkpoint {global_step}")
-
-                    model.load_state_dict(checkpoint['model_state_dict'])
-                    optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
 
                 for param_group in optimizer.param_groups:
                     param_group['lr'] *= 0.5
@@ -150,8 +138,7 @@ def main():
                 model.eval()
                 loss_eval = estimate_loss(model=model,
                                         eval_dataloader=val_dataloader,
-                                        device_type=device_type,
-                                        ptdtype=ptdtype
+                                        device_type=device_type
                                         )
                 model.train()
 
@@ -174,7 +161,14 @@ def main():
                                 optimizer=optimizer,
                                 iteration=global_step,
                                 val_loss=loss_eval,
-                                filepath=f"checkpoints/checkpoint_{global_step}.pt"
+                                filepath=f"checkpoints/checkpoint_{global_step}.pt",
+                                model_args={"vocab_size": vocab_size,
+                                            "d_model": d_model,
+                                            "num_heads": num_heads,
+                                            "num_layers": num_layers,
+                                            "d_ff": d_ff,
+                                            "max_len": max_len,
+                                            "dropout": dropout}
                                 )
 
             global_step += 1

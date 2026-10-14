@@ -294,6 +294,7 @@ class NanoTransformer(nn.Module):
         super().__init__()
         self.d_model = d_model
         self.vocab_size = vocab_size
+        self.max_len = max_len
 
         # 1. Embeddings & Positional Encoding
         self.token_embedding = nn.Embedding(vocab_size, d_model)

@@ -70,8 +70,7 @@ def train_step(
     x: torch.Tensor,
     y: torch.Tensor,
     grad_clip: float,
-    device_type: str,
-    ptdtype: torch.dtype,
+    device_type: str
 ) -> float:
     """Executes a single forward, backward, gradient clipping, and optimizer step under AMP."""
     optimizer.zero_grad(set_to_none=True)
@@ -152,7 +151,6 @@ def estimate_loss(
     model: nn.Module,
     eval_dataloader: DataLoader,
     device_type: str,
-    ptdtype: torch.dtype,
     max_eval_iters: int = 50,
 ) -> float:
     """Computes average cross-entropy loss over validation/evaluation batches without gradient updates."""
