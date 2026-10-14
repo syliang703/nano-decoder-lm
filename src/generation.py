@@ -104,12 +104,59 @@ def sample_next_token(
     return next_token_ids
 
 
+def apply_repetition_penalty(
+    logits: torch.Tensor,
+    generated_ids: torch.Tensor,
+    penalty: float
+) -> torch.Tensor:
+    """
+    Applies a repetition penalty to the logits of tokens that already appear
+    in the generated sequence history.
+
+    Args:
+        logits: Tensor of shape (batch_size, vocab_size)
+        generated_ids: Tensor of shape (batch_size, seq_len)
+        penalty: Float repetition penalty factor (> 1.0 penalizes repetition)
+
+    Returns:
+        logits: Penalized logits tensor of shape (batch_size, vocab_size)
+    """
+    if penalty == 1.0:
+        return logits
+
+    logits = logits.clone()
+    batch_size = logits.shape[0]
+
+    # Iterate over batch, find unique token IDs in generated_ids for each batch item,
+    # and adjust corresponding logits (divide if > 0, multiply if < 0)
+    for batch in range(batch_size):
+        token_ids = torch.unique(generated_ids[batch, :])
+        logits_to_modify = logits[batch, token_ids]
+
+        pos_mask = logits_to_modify > 0
+        neg_mask = ~pos_mask
+
+        logits_to_modify[pos_mask] /= penalty
+        logits_to_modify[neg_mask] *= penalty
+
+        logits[batch, token_ids] = logits_to_modify
+
+    return logits
+
+
 class Generator:
-    def __init__(self, model: NanoTransformer, temperature: float=1.0, top_k: int=0, top_p:float=1.0):
+    def __init__(self, model: NanoTransformer,
+                 temperature: float=1.0,
+                 top_k: int=0,
+                 top_p: float=1.0,
+                 repetition_penalty: float=1.12
+                 ):
+
         self.model = model
         self.temperature = temperature
         self.top_k = top_k
         self.top_p = top_p
+        self.repetition_penalty = repetition_penalty
 
     @torch.no_grad()
     def generate(
@@ -117,7 +164,8 @@ class Generator:
         prompt_ids: torch.Tensor,
         max_new_tokens: int = 20,
         use_cache: bool = True,
-        eos_token_id: int | None = None
+        eos_token_id: int | None = None,
+        repetition_penalty: float | None = None
     ) -> torch.Tensor:
         """
         Autoregressively generates new tokens using the model's stateful KV-cache.
@@ -132,6 +180,7 @@ class Generator:
         Returns:
             generated_ids: Tensor of full sequence (prompt + new tokens) of shape (batch_size, seq_len + max_new_tokens)
         """
+        # Check for max context length
         max_len = getattr(self.model, "max_len")
         prompt_len = prompt_ids.shape[1]
 
@@ -139,6 +188,9 @@ class Generator:
             print(f"Warning: Total request length exceeds model's maximum supported context window.")
             print(f"Capping to maximum supported context window")
             max_new_tokens = max_len - prompt_len
+
+        # Define repetition penalty if not explicitly passed
+        penalty = repetition_penalty if repetition_penalty is not None else self.repetition_penalty
 
         generated_ids = prompt_ids
         kv_cache = None
@@ -152,6 +204,8 @@ class Generator:
                 logits = self.model(generated_ids, use_cache=False)
 
             last_logits = logits[:, -1, :]
+            last_logits = apply_repetition_penalty(logits=last_logits, generated_ids=generated_ids, penalty=penalty)
+
             next_token_ids = sample_next_token(
                 logits=last_logits,
                 temperature=self.temperature,

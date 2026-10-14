@@ -13,8 +13,9 @@ def main():
     parser.add_argument("--max_new_tokens", type=int, default=100, help="Number of tokens to generate")
     parser.add_argument("--temperature", type=float, default=0.8, help="Sampling temperature")
     parser.add_argument("--top_k", type=int, default=50, help="Top-k filtering parameter")
-    parser.add_argument("--top_p", type=float, default=0.9, help="Top-p nucleus filtering parameter")
+    parser.add_argument("--top_p", type=float, default=0.95, help="Top-p nucleus filtering parameter")
     parser.add_argument("--device", type=str, default="mps", help="Device (cpu, mps, cuda)")
+    parser.add_argument("--repetition_penalty", type=float, default=1.12, help="Repetition penalty factor")
 
     args = parser.parse_args()
 
